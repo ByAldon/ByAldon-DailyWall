@@ -2,20 +2,17 @@
   "app_name": "ByAldon DailyWall",
   "market": "en-US",
   "image_resolution": "UHD",
-
   "wallpaper_original_folder": "assets/wallpapers/original",
   "wallpaper_watermarked_folder": "assets/wallpapers/watermarked",
   "history_file": "assets/history.json",
-
   "set_as_wallpaper": true,
-  "set_wallpaper_mode": "new_only",
+  "set_wallpaper_mode": "always",
   "keep_wallpapers": 30,
-
-  "apply_watermark": false,
+  "apply_watermark": true,
   "watermark_text": "ByAldon DailyWall",
   "watermark_icon": "assets/icon.png",
   "watermark_position": "bottom_right",
-  "watermark_opacity": 0.30,
+  "watermark_opacity": 0.3,
   "watermark_scale": 0.78,
   "watermark_bottom_offset": 42
 }

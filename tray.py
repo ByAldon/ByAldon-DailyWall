@@ -1,0 +1,441 @@
+import ctypes
+import os
+import sys
+import threading
+import winreg
+from pathlib import Path
+
+import pystray
+from PIL import Image
+
+from wallpaper.app_core import APP_VERSION, load_config, run_dailywall, save_config
+
+
+APP_NAME = "ByAldon DailyWall"
+STARTUP_REG_NAME = "ByAldonDailyWall"
+ICON_PATH = Path("assets/icon.png")
+GITHUB_URL = "https://github.com/"
+
+MB_OK = 0x00000000
+MB_ICONINFORMATION = 0x00000040
+MB_ICONERROR = 0x00000010
+MB_SETFOREGROUND = 0x00010000
+
+
+class DailyWallTrayApp:
+    def __init__(self):
+        self.icon = None
+        self.is_running_job = False
+
+    def log(self, message):
+        print(message)
+
+    def show_message_box(self, title, message, icon_type="info"):
+        """
+        Show a native Windows message box.
+
+        It is shown from a separate thread so the tray menu does not get stuck.
+        """
+
+        def worker():
+            flags = MB_OK | MB_SETFOREGROUND
+
+            if icon_type == "error":
+                flags |= MB_ICONERROR
+            else:
+                flags |= MB_ICONINFORMATION
+
+            try:
+                ctypes.windll.user32.MessageBoxW(
+                    None,
+                    str(message),
+                    str(title),
+                    flags
+                )
+            except Exception:
+                print(f"{title}: {message}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def run_wallpaper_job(self):
+        if self.is_running_job:
+            return
+
+        self.is_running_job = True
+
+        try:
+            run_dailywall(logger=self.log)
+        except Exception as error:
+            self.show_error("ByAldon DailyWall", f"Something went wrong:\n\n{error}")
+        finally:
+            self.is_running_job = False
+
+    def run_wallpaper_job_in_background(self):
+        thread = threading.Thread(target=self.run_wallpaper_job, daemon=True)
+        thread.start()
+
+    def show_about(self, icon=None, item=None):
+        self.show_message_box(
+            "About ByAldon DailyWall",
+            f"{APP_NAME}\n"
+            f"Version: {APP_VERSION}\n\n"
+            "A lightweight Windows wallpaper changer.\n\n"
+            "Independent project. Not affiliated with, endorsed by, "
+            "or sponsored by Microsoft or Bing.\n\n"
+            "GitHub update checking will be added later.",
+            icon_type="info"
+        )
+
+    def show_error(self, title, message):
+        self.show_message_box(title, message, icon_type="error")
+
+    def get_startup_command(self):
+        """
+        Build the command Windows should run at user login.
+
+        In development mode this starts tray.py with the current Python executable.
+        In a packaged EXE later, it will run the EXE directly.
+        """
+
+        if getattr(sys, "frozen", False):
+            return f'"{sys.executable}"'
+
+        tray_path = Path(__file__).resolve()
+        python_exe = Path(sys.executable).resolve()
+
+        return f'"{python_exe}" "{tray_path}"'
+
+    def is_startup_enabled(self):
+        """
+        Check if ByAldon DailyWall is registered to start with Windows.
+        """
+
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0,
+                winreg.KEY_READ
+            ) as key:
+                winreg.QueryValueEx(key, STARTUP_REG_NAME)
+                return True
+        except FileNotFoundError:
+            return False
+        except OSError:
+            return False
+
+    def set_startup_enabled(self, enabled):
+        """
+        Enable or disable startup with Windows for the current user.
+        """
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+            0,
+            winreg.KEY_SET_VALUE
+        ) as key:
+            if enabled:
+                winreg.SetValueEx(
+                    key,
+                    STARTUP_REG_NAME,
+                    0,
+                    winreg.REG_SZ,
+                    self.get_startup_command()
+                )
+            else:
+                try:
+                    winreg.DeleteValue(key, STARTUP_REG_NAME)
+                except FileNotFoundError:
+                    pass
+
+    def open_settings(self, icon=None, item=None):
+        """
+        Open settings in a separate thread.
+
+        This prevents the pystray menu callback from being blocked by Tkinter.
+        """
+
+        threading.Thread(target=self._open_settings_window, daemon=True).start()
+
+    def _open_settings_window(self):
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+        except Exception as error:
+            self.show_error("Settings", f"Could not open settings:\n\n{error}")
+            return
+
+        try:
+            config = load_config()
+        except Exception as error:
+            self.show_error("Settings", f"Could not load config.json:\n\n{error}")
+            return
+
+        window = tk.Tk()
+        window.title("ByAldon DailyWall Settings")
+        window.resizable(False, False)
+        window.geometry("720x590")
+        window.attributes("-topmost", True)
+        window.lift()
+        window.focus_force()
+
+        apply_watermark_var = tk.BooleanVar(value=bool(config.get("apply_watermark", True)))
+        set_as_wallpaper_var = tk.BooleanVar(value=bool(config.get("set_as_wallpaper", True)))
+        start_with_windows_var = tk.BooleanVar(value=self.is_startup_enabled())
+        mode_var = tk.StringVar(value=config.get("set_wallpaper_mode", "new_only"))
+
+        frame = tk.Frame(window, padx=28, pady=22)
+        frame.pack(fill="both", expand=True)
+
+        title = tk.Label(
+            frame,
+            text="ByAldon DailyWall Settings",
+            font=("Segoe UI", 14, "bold")
+        )
+        title.pack(anchor="w")
+
+        intro = tk.Label(
+            frame,
+            text=(
+                "Choose how ByAldon DailyWall starts, saves, and applies your daily wallpaper. "
+                "These settings are stored locally on your computer."
+            ),
+            wraplength=650,
+            justify="left",
+            anchor="w",
+            fg="#444444"
+        )
+        intro.pack(anchor="w", fill="x", pady=(8, 18))
+
+        app_frame = tk.LabelFrame(
+            frame,
+            text="App startup",
+            padx=16,
+            pady=12,
+            font=("Segoe UI", 10, "bold")
+        )
+        app_frame.pack(anchor="w", fill="x")
+
+        startup_check = tk.Checkbutton(
+            app_frame,
+            text="Start ByAldon DailyWall when Windows starts",
+            variable=start_with_windows_var,
+            font=("Segoe UI", 10, "bold")
+        )
+        startup_check.pack(anchor="w")
+
+        startup_help = tk.Label(
+            app_frame,
+            text=(
+                "When enabled, ByAldon DailyWall starts automatically after you sign in to Windows. "
+                "This is optional and can be turned off again here."
+            ),
+            wraplength=625,
+            justify="left",
+            anchor="w",
+            fg="#555555"
+        )
+        startup_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 4))
+
+        options_frame = tk.LabelFrame(
+            frame,
+            text="Wallpaper options",
+            padx=16,
+            pady=12,
+            font=("Segoe UI", 10, "bold")
+        )
+        options_frame.pack(anchor="w", fill="x", pady=(16, 0))
+
+        watermark_check = tk.Checkbutton(
+            options_frame,
+            text="Show ByAldon DailyWall watermark",
+            variable=apply_watermark_var,
+            font=("Segoe UI", 10, "bold")
+        )
+        watermark_check.pack(anchor="w")
+
+        watermark_help = tk.Label(
+            options_frame,
+            text=(
+                "Adds your own small ByAldon DailyWall branding to a separate local copy. "
+                "The original downloaded wallpaper is kept untouched."
+            ),
+            wraplength=625,
+            justify="left",
+            anchor="w",
+            fg="#555555"
+        )
+        watermark_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 12))
+
+        wallpaper_check = tk.Checkbutton(
+            options_frame,
+            text="Set image as Windows wallpaper",
+            variable=set_as_wallpaper_var,
+            font=("Segoe UI", 10, "bold")
+        )
+        wallpaper_check.pack(anchor="w")
+
+        wallpaper_help = tk.Label(
+            options_frame,
+            text=(
+                "When enabled, the app applies the downloaded or watermarked image as your desktop background. "
+                "Turn this off if you only want to download the image."
+            ),
+            wraplength=625,
+            justify="left",
+            anchor="w",
+            fg="#555555"
+        )
+        wallpaper_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 6))
+
+        mode_frame = tk.LabelFrame(
+            frame,
+            text="Update behavior",
+            padx=16,
+            pady=12,
+            font=("Segoe UI", 10, "bold")
+        )
+        mode_frame.pack(anchor="w", fill="x", pady=(16, 0))
+
+        mode_row = tk.Frame(mode_frame)
+        mode_row.pack(anchor="w", fill="x")
+
+        mode_label = tk.Label(
+            mode_row,
+            text="Wallpaper mode:",
+            font=("Segoe UI", 10, "bold")
+        )
+        mode_label.pack(side="left")
+
+        mode_menu = tk.OptionMenu(mode_row, mode_var, "new_only", "always")
+        mode_menu.config(width=12)
+        mode_menu.pack(side="left", padx=(10, 0))
+
+        mode_help = tk.Label(
+            mode_frame,
+            text=(
+                "new_only: update the desktop only when a new wallpaper or new watermarked copy is created.\n"
+                "always: apply the current local wallpaper every time the app runs."
+            ),
+            wraplength=625,
+            justify="left",
+            anchor="w",
+            fg="#555555"
+        )
+        mode_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(8, 0))
+
+        note = tk.Label(
+            frame,
+            text=(
+                "Tip: If you switch the watermark on or off, use 'Save and run now' "
+                "to apply the change immediately."
+            ),
+            wraplength=650,
+            justify="left",
+            anchor="w",
+            fg="#666666"
+        )
+        note.pack(anchor="w", fill="x", pady=(18, 14))
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(anchor="e", fill="x")
+
+        def save_settings(show_confirmation=True):
+            config["apply_watermark"] = bool(apply_watermark_var.get())
+            config["set_as_wallpaper"] = bool(set_as_wallpaper_var.get())
+            config["set_wallpaper_mode"] = mode_var.get()
+
+            try:
+                save_config(config)
+                self.set_startup_enabled(bool(start_with_windows_var.get()))
+
+                if show_confirmation:
+                    messagebox.showinfo(
+                        "Settings saved",
+                        "Your settings have been saved."
+                    )
+
+                return True
+
+            except Exception as error:
+                messagebox.showerror(
+                    "Settings",
+                    f"Could not save settings:\n\n{error}"
+                )
+                return False
+
+        def save_and_run():
+            if save_settings(show_confirmation=False):
+                self.run_wallpaper_job_in_background()
+                messagebox.showinfo(
+                    "Settings saved",
+                    "Your settings have been saved.\n\nByAldon DailyWall is now applying them."
+                )
+
+        close_button = tk.Button(button_frame, text="Close", width=14, command=window.destroy)
+        close_button.pack(side="right")
+
+        save_button = tk.Button(button_frame, text="Save", width=14, command=save_settings)
+        save_button.pack(side="right", padx=(0, 8))
+
+        save_run_button = tk.Button(
+            button_frame,
+            text="Save and run now",
+            width=20,
+            command=save_and_run
+        )
+        save_run_button.pack(side="right", padx=(0, 8))
+
+        window.protocol("WM_DELETE_WINDOW", window.destroy)
+        window.mainloop()
+
+    def close_app(self, icon=None, item=None):
+        """
+        Close the tray app.
+
+        pystray can sometimes keep a Windows event loop alive, especially during
+        development. Stop the tray icon first, then force-exit as a reliable
+        fallback.
+        """
+
+        try:
+            if self.icon:
+                self.icon.visible = False
+                self.icon.stop()
+        finally:
+            os._exit(0)
+
+    def create_icon_image(self):
+        if ICON_PATH.exists():
+            return Image.open(ICON_PATH).convert("RGBA")
+
+        return Image.new("RGBA", (64, 64), (0, 128, 255, 255))
+
+    def run(self):
+        image = self.create_icon_image()
+
+        menu = pystray.Menu(
+            pystray.MenuItem("About", self.show_about),
+            pystray.MenuItem("Settings", self.open_settings),
+            pystray.MenuItem("Close app", self.close_app)
+        )
+
+        self.icon = pystray.Icon(
+            "ByAldon DailyWall",
+            image,
+            "ByAldon DailyWall",
+            menu
+        )
+
+        self.run_wallpaper_job_in_background()
+        self.icon.run()
+
+
+def main():
+    app = DailyWallTrayApp()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()
