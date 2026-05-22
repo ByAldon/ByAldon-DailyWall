@@ -17,6 +17,7 @@ from wallpaper.app_core import APP_VERSION, load_config, run_dailywall, save_con
 APP_NAME = "ByAldon DailyWall"
 STARTUP_REG_NAME = "ByAldonDailyWall"
 ICON_PATH = Path("assets/icon.png")
+ICON_ICO_PATH = Path("assets/icon.ico")
 GITHUB_URL = "https://github.com/ByAldon/ByAldon-DailyWall"
 GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/ByAldon/ByAldon-DailyWall/releases/latest"
 GITHUB_RELEASES_API = "https://api.github.com/repos/ByAldon/ByAldon-DailyWall/releases"
@@ -256,6 +257,7 @@ class DailyWallTrayApp:
                 return
 
             window = tk.Tk()
+            self.set_window_icon(window)
             window.title("Update available")
             window.resizable(False, False)
             window.geometry("470x230")
@@ -334,6 +336,7 @@ class DailyWallTrayApp:
             return
 
         window = tk.Tk()
+        self.set_window_icon(window)
         window.title("About ByAldon DailyWall")
         window.resizable(False, False)
         window.geometry("500x340")
@@ -426,6 +429,20 @@ class DailyWallTrayApp:
     def show_error(self, title, message):
         self.show_message_box(title, message, icon_type="error")
 
+    def set_window_icon(self, window):
+        """
+        Set the ByAldon icon on Tkinter windows.
+
+        This fixes the default Tkinter feather icon in windows like
+        About and Settings.
+        """
+
+        try:
+            if ICON_ICO_PATH.exists():
+                window.iconbitmap(str(ICON_ICO_PATH))
+        except Exception:
+            pass
+
     def get_startup_command(self):
         """
         Build the command Windows should run at user login.
@@ -510,6 +527,7 @@ class DailyWallTrayApp:
             return
 
         window = tk.Tk()
+        self.set_window_icon(window)
         window.title("ByAldon DailyWall Settings")
         window.resizable(False, False)
         window.geometry("720x690")

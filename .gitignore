@@ -13,10 +13,15 @@ build/
 dist/
 *.spec
 
+# Installer output
+installer-output/
+Output/
+*.exe
+
 # Local history
 assets/history.json
 
-# Local downloaded/generated wallpapers
+# Local downloaded wallpapers
 assets/wallpapers/*.jpg
 assets/wallpapers/*.jpeg
 assets/wallpapers/*.png
