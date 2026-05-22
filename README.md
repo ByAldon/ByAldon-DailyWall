@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" alt="ByAldon DailyWall icon" width="128">
+</p>
+
 # ByAldon DailyWall
 
 ByAldon DailyWall is a lightweight Windows wallpaper changer.
