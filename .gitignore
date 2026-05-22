@@ -1,0 +1,38 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build output
+build/
+dist/
+*.spec
+
+# Local history
+assets/history.json
+
+# Local downloaded wallpapers
+assets/wallpapers/*.jpg
+assets/wallpapers/*.jpeg
+assets/wallpapers/*.png
+
+assets/wallpapers/original/*
+!assets/wallpapers/original/.gitkeep
+
+assets/wallpapers/watermarked/*
+!assets/wallpapers/watermarked/.gitkeep
+
+# Keep wallpaper folders
+!assets/wallpapers/.gitkeep
+
+# Editor/system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
