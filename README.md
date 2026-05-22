@@ -21,7 +21,11 @@ The project is intentionally simple, clean, and transparent about what it does.
 - Avoids downloading the same wallpaper twice
 - Can skip setting the wallpaper if nothing new was downloaded or created
 - Can automatically clean up older local wallpapers
-- Includes an early system tray app with About, Settings, and Close app
+- Includes a system tray app with About, Settings, and Close app
+- Settings window includes explanatory text for non-technical users
+- Optional startup with Windows
+- About window shows the current version and GitHub repository link
+- About window can check GitHub releases, including pre-releases, for updates
 - Uses your own ByAldon branding only
 - No tracking
 - No analytics
@@ -29,7 +33,7 @@ The project is intentionally simple, clean, and transparent about what it does.
 ## Current version
 
 ```text
-0.6.0
+0.6.1
 ```
 
 ## Project structure
@@ -38,7 +42,6 @@ The project is intentionally simple, clean, and transparent about what it does.
 assets/
   icon.ico
   icon.png
-  history.json
   wallpapers/
     .gitkeep
     original/
@@ -60,6 +63,8 @@ requirements.txt
 README.md
 LICENSE
 ```
+
+Local runtime files such as `assets/history.json`, downloaded wallpapers, and generated watermarked wallpapers are intentionally ignored by Git.
 
 ## Requirements
 
@@ -103,6 +108,36 @@ About
 Settings
 Close app
 ```
+
+## Tray app
+
+The tray app is the intended end-user direction for ByAldon DailyWall.
+
+### About
+
+The About window shows:
+
+- App name
+- Current version
+- GitHub repository link
+- Check for updates button
+
+The update check compares the local app version with the newest GitHub release. During development it also checks pre-releases.
+
+GitHub repository:
+
+```text
+https://github.com/ByAldon/ByAldon-DailyWall
+```
+
+### Settings
+
+The Settings window currently includes:
+
+- Start ByAldon DailyWall when Windows starts
+- Show ByAldon DailyWall watermark
+- Set image as Windows wallpaper
+- Wallpaper mode: `new_only` or `always`
 
 ## Configuration
 
@@ -168,11 +203,21 @@ Or use the Settings window in the tray app.
 | `watermark_scale` | Controls watermark size. Lower is smaller. |
 | `watermark_bottom_offset` | Moves bottom-positioned watermarks upward. Useful to avoid the Windows taskbar. |
 
-## About and updates
+## Wallpaper modes
 
-The tray app currently shows the app name and local version in the About window.
+`set_wallpaper_mode` supports two modes:
 
-A future version will add GitHub update checking from the About window by comparing the local app version with the latest GitHub release.
+```text
+new_only
+```
+
+Only sets the wallpaper when a new image was downloaded or a new watermarked copy was created.
+
+```text
+always
+```
+
+Always sets the wallpaper, even if the image already exists locally.
 
 ## Original and watermarked files
 
@@ -206,13 +251,10 @@ This project does not use Microsoft or Bing logos, icons, or branding as part of
 
 ## Planned features
 
-- Better graphical interface
-- Better user settings window
-- GitHub update check from the About window
-- Unsplash support
-- Auto-start with Windows
-- Wallpaper preview
 - Build as standalone `.exe`
+- Wallpaper preview
+- Unsplash support
+- Improved graphical interface
 
 ## License
 

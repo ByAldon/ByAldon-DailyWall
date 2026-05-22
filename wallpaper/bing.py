@@ -35,7 +35,7 @@ def fetch_daily_wallpaper_info(market="en-US", use_uhd=True):
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "ByAldon DailyWall/1.0"
+            "User-Agent": "ByAldon DailyWall/0.6.1"
         }
     )
 

@@ -53,7 +53,7 @@ def download_image(image_url, target_folder, title="bing_wallpaper", start_date=
     request = urllib.request.Request(
         image_url,
         headers={
-            "User-Agent": "ByAldon DailyWall/0.5"
+            "User-Agent": "ByAldon DailyWall/0.6.1"
         }
     )
 

@@ -6,7 +6,7 @@
   "wallpaper_watermarked_folder": "assets/wallpapers/watermarked",
   "history_file": "assets/history.json",
   "set_as_wallpaper": true,
-  "set_wallpaper_mode": "always",
+  "set_wallpaper_mode": "new_only",
   "keep_wallpapers": 30,
   "apply_watermark": true,
   "watermark_text": "ByAldon DailyWall",

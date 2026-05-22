@@ -8,7 +8,7 @@ from wallpaper.windows import set_wallpaper
 
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.6.1"
 
 
 def load_config():

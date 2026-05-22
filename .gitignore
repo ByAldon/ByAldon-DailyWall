@@ -16,7 +16,7 @@ dist/
 # Local history
 assets/history.json
 
-# Local downloaded wallpapers
+# Local downloaded/generated wallpapers
 assets/wallpapers/*.jpg
 assets/wallpapers/*.jpeg
 assets/wallpapers/*.png
