@@ -2,6 +2,7 @@ import ctypes
 import os
 import sys
 import threading
+import webbrowser
 import winreg
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from wallpaper.app_core import APP_VERSION, load_config, run_dailywall, save_con
 APP_NAME = "ByAldon DailyWall"
 STARTUP_REG_NAME = "ByAldonDailyWall"
 ICON_PATH = Path("assets/icon.png")
-GITHUB_URL = "https://github.com/"
+GITHUB_URL = "https://github.com/ByAldon/ByAldon-DailyWall"
 
 MB_OK = 0x00000000
 MB_ICONINFORMATION = 0x00000040
@@ -75,16 +76,106 @@ class DailyWallTrayApp:
         thread.start()
 
     def show_about(self, icon=None, item=None):
-        self.show_message_box(
-            "About ByAldon DailyWall",
-            f"{APP_NAME}\n"
-            f"Version: {APP_VERSION}\n\n"
-            "A lightweight Windows wallpaper changer.\n\n"
-            "Independent project. Not affiliated with, endorsed by, "
-            "or sponsored by Microsoft or Bing.\n\n"
-            "GitHub update checking will be added later.",
-            icon_type="info"
+        """
+        Open a small About window with version information and a GitHub link.
+        """
+
+        threading.Thread(target=self._open_about_window, daemon=True).start()
+
+    def _open_about_window(self):
+        try:
+            import tkinter as tk
+        except Exception:
+            self.show_message_box(
+                "About ByAldon DailyWall",
+                f"{APP_NAME}\n"
+                f"Version: {APP_VERSION}\n\n"
+                f"GitHub:\n{GITHUB_URL}",
+                icon_type="info"
+            )
+            return
+
+        window = tk.Tk()
+        window.title("About ByAldon DailyWall")
+        window.resizable(False, False)
+        window.geometry("470x300")
+        window.attributes("-topmost", True)
+        window.lift()
+        window.focus_force()
+
+        frame = tk.Frame(window, padx=24, pady=22)
+        frame.pack(fill="both", expand=True)
+
+        title = tk.Label(
+            frame,
+            text=APP_NAME,
+            font=("Segoe UI", 15, "bold")
         )
+        title.pack(anchor="w")
+
+        version = tk.Label(
+            frame,
+            text=f"Version: {APP_VERSION}",
+            font=("Segoe UI", 10)
+        )
+        version.pack(anchor="w", pady=(4, 14))
+
+        description = tk.Label(
+            frame,
+            text=(
+                "A lightweight Windows wallpaper changer.\n\n"
+                "Independent project. Not affiliated with, endorsed by, "
+                "or sponsored by Microsoft or Bing."
+            ),
+            wraplength=410,
+            justify="left",
+            fg="#444444"
+        )
+        description.pack(anchor="w", fill="x")
+
+        repo_label = tk.Label(
+            frame,
+            text="GitHub repository:",
+            font=("Segoe UI", 10, "bold")
+        )
+        repo_label.pack(anchor="w", pady=(16, 2))
+
+        repo_link = tk.Label(
+            frame,
+            text=GITHUB_URL,
+            fg="#0066cc",
+            cursor="hand2",
+            wraplength=410,
+            justify="left"
+        )
+        repo_link.pack(anchor="w")
+
+        def open_repo(event=None):
+            webbrowser.open(GITHUB_URL)
+
+        repo_link.bind("<Button-1>", open_repo)
+
+        button_frame = tk.Frame(frame)
+        button_frame.pack(anchor="e", fill="x", pady=(22, 0))
+
+        open_button = tk.Button(
+            button_frame,
+            text="Open GitHub repository",
+            width=22,
+            command=open_repo
+        )
+        open_button.pack(side="right")
+
+        close_button = tk.Button(
+            button_frame,
+            text="Close",
+            width=12,
+            command=window.destroy
+        )
+        close_button.pack(side="right", padx=(0, 8))
+
+        window.protocol("WM_DELETE_WINDOW", window.destroy)
+        window.mainloop()
 
     def show_error(self, title, message):
         self.show_message_box(title, message, icon_type="error")
