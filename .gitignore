@@ -16,23 +16,20 @@ dist/
 # Installer output
 installer-output/
 Output/
-*.exe
 
-# Local history
+# Local runtime data
 assets/history.json
 
-# Local downloaded wallpapers
-assets/wallpapers/*.jpg
-assets/wallpapers/*.jpeg
-assets/wallpapers/*.png
-
+# Downloaded/generated wallpapers
 assets/wallpapers/original/*
 !assets/wallpapers/original/.gitkeep
 
 assets/wallpapers/watermarked/*
 !assets/wallpapers/watermarked/.gitkeep
 
-# Keep wallpaper folders
+assets/wallpapers/*.jpg
+assets/wallpapers/*.jpeg
+assets/wallpapers/*.png
 !assets/wallpapers/.gitkeep
 
 # Editor/system files
@@ -41,3 +38,7 @@ assets/wallpapers/watermarked/*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local archives
+*.zip
+*.7z

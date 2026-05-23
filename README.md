@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" alt="ByAldon DailyWall icon" width="128">
+  <img src="assets/icon.png" alt="ByAldon DailyWall v0.6.12 icon" width="128">
 </p>
 
 # ByAldon DailyWall
@@ -24,6 +24,11 @@ The project is intentionally simple, clean, and transparent about what it does.
 - Can automatically clean up older local wallpapers
 - Includes a system tray app with About, Settings, and Close app
 - Settings window includes explanatory text for non-technical users
+- Settings window is scrollable for smaller screens
+- Update behavior is shown as clear radio buttons instead of a technical dropdown
+- Settings includes a Show watermark now button for immediate testing
+- Reliable local watermarked copy mode is the default watermark style
+- Watermark is positioned top-right by default with extra edge spacing
 - Optional startup with Windows
 - About window shows the current version and GitHub repository link
 - About window can check GitHub releases, including pre-releases, for updates
@@ -34,7 +39,7 @@ The project is intentionally simple, clean, and transparent about what it does.
 ## Current version
 
 ```text
-0.6.2
+0.6.12
 ```
 
 ## Project structure
@@ -140,6 +145,19 @@ The Settings window currently includes:
 - Set image as Windows wallpaper
 - Wallpaper mode: `new_only` or `always`
 
+
+## User settings and AppData
+
+ByAldon DailyWall stores user settings, history, and downloaded wallpapers in the user's AppData folder:
+
+```text
+%APPDATA%\ByAldon DailyWall
+```
+
+This is intentional. It keeps the installed app folder clean and avoids Windows permission problems.
+
+The Settings window also shows the exact config file path and includes an **Open settings folder** button.
+
 ## Configuration
 
 Settings are stored in `config.json`.
@@ -162,9 +180,9 @@ Settings are stored in `config.json`.
   "watermark_text": "ByAldon DailyWall",
   "watermark_icon": "assets/icon.png",
   "watermark_position": "bottom_right",
-  "watermark_opacity": 0.30,
+  "watermark_opacity": 0.700,
   "watermark_scale": 0.78,
-  "watermark_bottom_offset": 42
+  "watermark_bottom_offset": 80
 }
 ```
 
@@ -203,6 +221,7 @@ Or use the Settings window in the tray app.
 | `watermark_opacity` | Controls watermark transparency. Lower is more subtle. |
 | `watermark_scale` | Controls watermark size. Lower is smaller. |
 | `watermark_bottom_offset` | Moves bottom-positioned watermarks upward. Useful to avoid the Windows taskbar. |
+| `watermark_margin` | Controls the distance from the screen edges for top/side watermark positions. |
 
 ## Wallpaper modes
 
@@ -260,3 +279,8 @@ This project does not use Microsoft or Bing logos, icons, or branding as part of
 ## License
 
 This project is licensed under the MIT License.
+
+
+## v0.6.12 note
+
+The watermark can now be shown as a Windows desktop overlay instead of modifying the wallpaper image. This keeps the original downloaded wallpaper untouched and makes positioning above the taskbar more reliable.

@@ -8,11 +8,15 @@
   "set_as_wallpaper": true,
   "set_wallpaper_mode": "always",
   "keep_wallpapers": 30,
-  "apply_watermark": false,
+  "apply_watermark": true,
   "watermark_text": "ByAldon DailyWall",
   "watermark_icon": "assets/icon.png",
-  "watermark_position": "bottom_right",
-  "watermark_opacity": 0.3,
+  "watermark_position": "top_right",
+  "watermark_opacity": 0.7,
   "watermark_scale": 0.78,
-  "watermark_bottom_offset": 42
+  "watermark_bottom_offset": 190,
+  "watermark_mode": "burned_in",
+  "watermark_overlay_margin": 32,
+  "watermark_overlay_topmost": true,
+  "watermark_margin": 70
 }

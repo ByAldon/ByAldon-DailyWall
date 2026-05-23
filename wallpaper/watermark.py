@@ -9,7 +9,9 @@ def create_watermarked_wallpaper(
     position="bottom_right",
     opacity=0.30,
     scale=0.78,
-    bottom_offset=42
+    bottom_offset=80,
+    margin=None,
+    force_recreate=False
 ):
     """
     Create a local watermarked copy of a wallpaper.
@@ -19,7 +21,7 @@ def create_watermarked_wallpaper(
     Returns:
         tuple:
             Path: path to the watermarked image
-            bool: True if created, False if it already existed
+            bool: True if created/recreated, False if it already existed
     """
 
     try:
@@ -40,7 +42,7 @@ def create_watermarked_wallpaper(
 
     watermarked_path = output_path / f"{original_path.stem}_watermarked.jpg"
 
-    if watermarked_path.exists():
+    if watermarked_path.exists() and not force_recreate:
         return watermarked_path, False
 
     base_image = Image.open(original_path).convert("RGBA")
@@ -97,7 +99,10 @@ def create_watermarked_wallpaper(
     box_width = content_width + padding_x * 2
     box_height = content_height + padding_y * 2
 
-    margin = max(18, int(short_side * 0.018))
+    if margin is None:
+        margin = max(18, int(short_side * 0.018))
+    else:
+        margin = max(18, int(margin))
 
     position = position.lower()
 

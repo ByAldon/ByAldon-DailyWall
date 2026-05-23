@@ -11,13 +11,15 @@ from pathlib import Path
 import pystray
 from PIL import Image
 
-from wallpaper.app_core import APP_VERSION, get_app_base_path, load_config, run_dailywall, save_config
+from wallpaper.overlay import WatermarkOverlay
+
+from wallpaper.app_core import APP_VERSION, create_default_config, get_user_data_path, load_config, load_runtime_config, resolve_config_path, resource_path, run_dailywall, save_config
 
 
 APP_NAME = "ByAldon DailyWall"
 STARTUP_REG_NAME = "ByAldonDailyWall"
-ICON_PATH = get_app_base_path() / "assets" / "icon.png"
-ICON_ICO_PATH = get_app_base_path() / "assets" / "icon.ico"
+ICON_PATH = resource_path("assets/icon.png")
+ICON_ICO_PATH = resource_path("assets/icon.ico")
 GITHUB_URL = "https://github.com/ByAldon/ByAldon-DailyWall"
 GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/ByAldon/ByAldon-DailyWall/releases/latest"
 GITHUB_RELEASES_API = "https://api.github.com/repos/ByAldon/ByAldon-DailyWall/releases"
@@ -32,6 +34,7 @@ class DailyWallTrayApp:
     def __init__(self):
         self.icon = None
         self.is_running_job = False
+        self.watermark_overlay = WatermarkOverlay()
 
     def log(self, message):
         print(message)
@@ -63,22 +66,36 @@ class DailyWallTrayApp:
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def run_wallpaper_job(self):
+    def run_wallpaper_job(self, force_apply=False):
         if self.is_running_job:
             return
 
         self.is_running_job = True
 
         try:
-            run_dailywall(logger=self.log)
+            run_dailywall(logger=self.log, force_apply=force_apply)
+            self.sync_watermark_overlay()
         except Exception as error:
             self.show_error("ByAldon DailyWall", f"Something went wrong:\n\n{error}")
         finally:
             self.is_running_job = False
 
-    def run_wallpaper_job_in_background(self):
-        thread = threading.Thread(target=self.run_wallpaper_job, daemon=True)
+    def run_wallpaper_job_in_background(self, force_apply=False):
+        thread = threading.Thread(
+            target=self.run_wallpaper_job,
+            kwargs={"force_apply": force_apply},
+            daemon=True
+        )
         thread.start()
+
+    def sync_watermark_overlay(self):
+        """Show or hide the fake desktop watermark based on current settings."""
+
+        try:
+            config = load_runtime_config()
+            self.watermark_overlay.refresh(config)
+        except Exception as error:
+            print(f"Could not refresh watermark overlay: {error}")
 
     def normalize_version(self, version):
         """
@@ -451,15 +468,13 @@ class DailyWallTrayApp:
         In a packaged EXE later, it will run the EXE directly.
         """
 
-        app_folder = get_app_base_path()
-
         if getattr(sys, "frozen", False):
-            return f'cmd /c "cd /d "{app_folder}" && "{sys.executable}""'
+            return f'"{sys.executable}"'
 
         tray_path = Path(__file__).resolve()
         python_exe = Path(sys.executable).resolve()
 
-        return f'cmd /c "cd /d "{app_folder}" && "{python_exe}" "{tray_path}""'
+        return f'"{python_exe}" "{tray_path}"'
 
     def is_startup_enabled(self):
         """
@@ -525,229 +540,336 @@ class DailyWallTrayApp:
         try:
             config = load_config()
         except Exception as error:
-            self.show_error("Settings", f"Could not load config.json:\n\n{error}")
+            self.show_error("Settings", f"Could not load settings:\n\n{error}")
             return
+
+        config_file_path = resolve_config_path()
+        settings_folder = get_user_data_path()
 
         window = tk.Tk()
         self.set_window_icon(window)
         window.title("ByAldon DailyWall Settings")
-        window.resizable(False, False)
-        window.geometry("720x690")
+        window.resizable(True, True)
+        window.geometry("850x650")
+        window.minsize(620, 480)
         window.attributes("-topmost", True)
         window.lift()
         window.focus_force()
 
+        current_mode = str(config.get("set_wallpaper_mode", "always")).lower()
+        if current_mode not in ("new_only", "always"):
+            current_mode = "always"
+
+        current_watermark_mode = str(config.get("watermark_mode", "burned_in")).lower()
+        if current_watermark_mode not in ("burned_in", "overlay"):
+            current_watermark_mode = "burned_in"
+
         apply_watermark_var = tk.BooleanVar(value=bool(config.get("apply_watermark", True)))
         set_as_wallpaper_var = tk.BooleanVar(value=bool(config.get("set_as_wallpaper", True)))
         start_with_windows_var = tk.BooleanVar(value=self.is_startup_enabled())
-        mode_var = tk.StringVar(value=config.get("set_wallpaper_mode", "new_only"))
+        mode_var = tk.StringVar(value=current_mode)
+        watermark_mode_var = tk.StringVar(value=current_watermark_mode)
 
-        frame = tk.Frame(window, padx=28, pady=22)
+        outer = tk.Frame(window)
+        outer.pack(fill="both", expand=True)
+
+        canvas = tk.Canvas(outer, highlightthickness=0)
+        scrollbar = tk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        scroll_frame = tk.Frame(canvas)
+
+        scroll_window = canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+
+        def update_scroll_region(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def update_scroll_width(event):
+            canvas.itemconfigure(scroll_window, width=event.width)
+
+        scroll_frame.bind("<Configure>", update_scroll_region)
+        canvas.bind("<Configure>", update_scroll_width)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        def on_mousewheel(event):
+            # Windows/macOS mousewheel support.
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        def on_mousewheel_linux_up(event):
+            canvas.yview_scroll(-1, "units")
+
+        def on_mousewheel_linux_down(event):
+            canvas.yview_scroll(1, "units")
+
+        canvas.bind_all("<MouseWheel>", on_mousewheel)
+        canvas.bind_all("<Button-4>", on_mousewheel_linux_up)
+        canvas.bind_all("<Button-5>", on_mousewheel_linux_down)
+
+        frame = tk.Frame(scroll_frame, padx=24, pady=18)
         frame.pack(fill="both", expand=True)
 
-        title = tk.Label(
-            frame,
-            text="ByAldon DailyWall Settings",
-            font=("Segoe UI", 14, "bold")
-        )
+        title = tk.Label(frame, text="ByAldon DailyWall Settings", font=("Segoe UI", 14, "bold"))
         title.pack(anchor="w")
 
         intro = tk.Label(
             frame,
-            text=(
-                "Choose how ByAldon DailyWall starts, saves, and applies your daily wallpaper. "
-                "These settings are stored locally on your computer."
-            ),
-            wraplength=650,
+            text=("Choose how ByAldon DailyWall starts, saves, and applies your wallpaper. "
+                  "Your choices are saved in AppData, not beside the EXE."),
+            wraplength=760,
             justify="left",
             anchor="w",
             fg="#444444"
         )
-        intro.pack(anchor="w", fill="x", pady=(8, 18))
+        intro.pack(anchor="w", fill="x", pady=(6, 10))
 
-        app_frame = tk.LabelFrame(
-            frame,
-            text="App startup",
-            padx=16,
-            pady=12,
-            font=("Segoe UI", 10, "bold")
-        )
-        app_frame.pack(anchor="w", fill="x")
+        data_frame = tk.LabelFrame(frame, text="Settings location", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+        data_frame.pack(anchor="w", fill="x")
 
-        startup_check = tk.Checkbutton(
+        tk.Label(
+            data_frame,
+            text=f"Config file: {config_file_path}",
+            wraplength=760,
+            justify="left",
+            anchor="w",
+            fg="#333333"
+        ).pack(anchor="w", fill="x")
+
+        def open_settings_folder():
+            try:
+                os.startfile(settings_folder)
+            except Exception as error:
+                messagebox.showerror("Open settings folder", f"Could not open the settings folder:\n\n{error}")
+
+        tk.Button(data_frame, text="Open settings folder", width=20, command=open_settings_folder).pack(anchor="w", pady=(6, 0))
+
+        app_frame = tk.LabelFrame(frame, text="App startup", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+        app_frame.pack(anchor="w", fill="x", pady=(8, 0))
+
+        tk.Checkbutton(
             app_frame,
             text="Start ByAldon DailyWall when Windows starts",
             variable=start_with_windows_var,
             font=("Segoe UI", 10, "bold")
-        )
-        startup_check.pack(anchor="w")
+        ).pack(anchor="w")
 
-        startup_help = tk.Label(
+        tk.Label(
             app_frame,
-            text=(
-                "When enabled, ByAldon DailyWall starts automatically after you sign in to Windows. "
-                "This is optional and can be turned off again here."
-            ),
-            wraplength=625,
+            text="Starts the app automatically after you sign in to Windows. You can turn this off again here.",
+            wraplength=760,
             justify="left",
             anchor="w",
             fg="#555555"
-        )
-        startup_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 4))
+        ).pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 0))
 
-        options_frame = tk.LabelFrame(
-            frame,
-            text="Wallpaper options",
-            padx=16,
-            pady=12,
-            font=("Segoe UI", 10, "bold")
-        )
-        options_frame.pack(anchor="w", fill="x", pady=(16, 0))
+        options_frame = tk.LabelFrame(frame, text="Wallpaper options", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+        options_frame.pack(anchor="w", fill="x", pady=(8, 0))
 
-        watermark_check = tk.Checkbutton(
+        tk.Checkbutton(
             options_frame,
             text="Show ByAldon DailyWall watermark",
             variable=apply_watermark_var,
             font=("Segoe UI", 10, "bold")
-        )
-        watermark_check.pack(anchor="w")
+        ).pack(anchor="w")
 
-        watermark_help = tk.Label(
+        tk.Label(
             options_frame,
-            text=(
-                "Adds your own small ByAldon DailyWall branding to a separate local copy. "
-                "The original downloaded wallpaper is kept untouched."
-            ),
-            wraplength=625,
+            text="Shows small ByAldon DailyWall branding. The original downloaded wallpaper stays untouched.",
+            wraplength=760,
             justify="left",
             anchor="w",
             fg="#555555"
-        )
-        watermark_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 12))
+        ).pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 6))
 
-        wallpaper_check = tk.Checkbutton(
+        tk.Checkbutton(
             options_frame,
             text="Set image as Windows wallpaper",
             variable=set_as_wallpaper_var,
             font=("Segoe UI", 10, "bold")
-        )
-        wallpaper_check.pack(anchor="w")
+        ).pack(anchor="w")
 
-        wallpaper_help = tk.Label(
+        tk.Label(
             options_frame,
-            text=(
-                "When enabled, the app applies the downloaded or watermarked image as your desktop background. "
-                "Turn this off if you only want to download the image."
-            ),
-            wraplength=625,
+            text="Applies the downloaded or watermarked image as your desktop background. Turn this off to only download images.",
+            wraplength=760,
             justify="left",
             anchor="w",
             fg="#555555"
-        )
-        wallpaper_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 6))
+        ).pack(anchor="w", fill="x", padx=(24, 0), pady=(2, 0))
 
-        mode_frame = tk.LabelFrame(
+        watermark_style_frame = tk.LabelFrame(
             frame,
-            text="Update behavior",
-            padx=16,
-            pady=12,
+            text="Watermark style",
+            padx=14,
+            pady=8,
             font=("Segoe UI", 10, "bold")
         )
-        mode_frame.pack(anchor="w", fill="x", pady=(16, 0))
+        watermark_style_frame.pack(anchor="w", fill="x", pady=(8, 0))
 
-        mode_row = tk.Frame(mode_frame)
-        mode_row.pack(anchor="w", fill="x")
+        tk.Radiobutton(
+            watermark_style_frame,
+            text="Reliable: create a local watermarked wallpaper copy",
+            variable=watermark_mode_var,
+            value="burned_in"
+        ).pack(anchor="w", padx=(18, 0))
 
-        mode_label = tk.Label(
-            mode_row,
-            text="Wallpaper mode:",
-            font=("Segoe UI", 10, "bold")
-        )
-        mode_label.pack(side="left")
+        tk.Radiobutton(
+            watermark_style_frame,
+            text="Experimental: show watermark as a desktop overlay",
+            variable=watermark_mode_var,
+            value="overlay"
+        ).pack(anchor="w", padx=(18, 0))
 
-        mode_menu = tk.OptionMenu(mode_row, mode_var, "new_only", "always")
-        mode_menu.config(width=12)
-        mode_menu.pack(side="left", padx=(10, 0))
+        tk.Label(
+            watermark_style_frame,
+            text=("Recommended: use the reliable local copy. It is visible on normal Windows and in VMs. "
+                  "The original wallpaper is still kept untouched. The watermark is placed in the top-right corner by default, with extra spacing from the screen edges."),
+            wraplength=760,
+            justify="left",
+            anchor="w",
+            fg="#555555"
+        ).pack(anchor="w", fill="x", padx=(18, 0), pady=(4, 0))
 
-        mode_help = tk.Label(
+        mode_frame = tk.LabelFrame(frame, text="Update behavior", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+        mode_frame.pack(anchor="w", fill="x", pady=(8, 0))
+
+        tk.Label(mode_frame, text="Wallpaper mode:", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+
+        tk.Radiobutton(
             mode_frame,
-            text=(
-                "new_only: update the desktop only when a new wallpaper or new watermarked copy is created.\n"
-                "always: apply the current local wallpaper every time the app runs."
-            ),
-            wraplength=625,
+            text="Update only when a new wallpaper is downloaded",
+            variable=mode_var,
+            value="new_only"
+        ).pack(anchor="w", padx=(18, 0), pady=(2, 0))
+
+        tk.Radiobutton(
+            mode_frame,
+            text="Apply the current local wallpaper every time the app runs",
+            variable=mode_var,
+            value="always"
+        ).pack(anchor="w", padx=(18, 0))
+
+        tk.Label(
+            mode_frame,
+            text="Use 'always' if you want Settings changes, such as watermark on/off, to be applied more predictably.",
+            wraplength=760,
             justify="left",
             anchor="w",
             fg="#555555"
-        )
-        mode_help.pack(anchor="w", fill="x", padx=(24, 0), pady=(8, 0))
+        ).pack(anchor="w", fill="x", padx=(18, 0), pady=(3, 0))
 
-        note = tk.Label(
+        tk.Label(
             frame,
-            text=(
-                "Tip: If you switch the watermark on or off, use 'Save and run now' "
-                "to apply the change immediately."
-            ),
-            wraplength=650,
+            text="Tip: after changing the watermark setting, click 'Save and run now' to apply it immediately.",
+            wraplength=760,
             justify="left",
             anchor="w",
             fg="#666666"
-        )
-        note.pack(anchor="w", fill="x", pady=(18, 18))
+        ).pack(anchor="w", fill="x", pady=(8, 10))
 
-        separator = tk.Frame(frame, height=1, bg="#d0d0d0")
-        separator.pack(fill="x", pady=(0, 14))
-
-        button_frame = tk.Frame(frame)
-        button_frame.pack(anchor="e", fill="x")
+        # Fixed button bar. This stays visible even when the settings content scrolls.
+        button_bar = tk.Frame(window, padx=14, pady=10, relief="groove", borderwidth=1)
+        button_bar.pack(side="bottom", fill="x")
 
         def save_settings(show_confirmation=True):
             config["apply_watermark"] = bool(apply_watermark_var.get())
             config["set_as_wallpaper"] = bool(set_as_wallpaper_var.get())
             config["set_wallpaper_mode"] = mode_var.get()
+            config["watermark_mode"] = watermark_mode_var.get()
+            config["watermark_overlay_topmost"] = True
 
             try:
                 save_config(config)
                 self.set_startup_enabled(bool(start_with_windows_var.get()))
 
+                saved_config = load_config()
+
+                apply_watermark_var.set(bool(saved_config.get("apply_watermark", True)))
+                set_as_wallpaper_var.set(bool(saved_config.get("set_as_wallpaper", True)))
+                mode_var.set(str(saved_config.get("set_wallpaper_mode", "always")))
+                watermark_mode_var.set(str(saved_config.get("watermark_mode", "burned_in")))
+
+                self.sync_watermark_overlay()
+
                 if show_confirmation:
                     messagebox.showinfo(
                         "Settings saved",
-                        "Your settings have been saved."
+                        "Your settings have been saved.\n\n"
+                        f"Watermark: {'On' if saved_config.get('apply_watermark', True) else 'Off'}\n"
+                        f"Watermark style: {saved_config.get('watermark_mode', 'burned_in')}\n"
+                        f"Set as wallpaper: {'On' if saved_config.get('set_as_wallpaper', True) else 'Off'}\n"
+                        f"Wallpaper mode: {saved_config.get('set_wallpaper_mode', 'always')}\n\n"
+                        f"Saved to:\n{config_file_path}"
                     )
 
                 return True
 
             except Exception as error:
-                messagebox.showerror(
-                    "Settings",
-                    f"Could not save settings:\n\n{error}"
-                )
+                messagebox.showerror("Settings", f"Could not save settings:\n\n{error}")
                 return False
 
         def save_and_run():
             if save_settings(show_confirmation=False):
-                self.run_wallpaper_job_in_background()
+                self.run_wallpaper_job_in_background(force_apply=True)
                 messagebox.showinfo(
                     "Settings saved",
-                    "Your settings have been saved.\n\nByAldon DailyWall is now applying them."
+                    f"Your settings have been saved and are now being applied.\n\nSaved to:\n{config_file_path}"
                 )
 
-        close_button = tk.Button(button_frame, text="Close", width=14, command=window.destroy)
-        close_button.pack(side="right")
+        def restore_defaults():
+            if not messagebox.askyesno(
+                "Restore defaults",
+                "Restore the default settings?\n\nThis will turn the watermark on again and use the reliable local watermarked copy."
+            ):
+                return
 
-        save_button = tk.Button(button_frame, text="Save", width=14, command=save_settings)
-        save_button.pack(side="right", padx=(0, 8))
+            default_config = create_default_config()
+            default_config["watermark_mode"] = "burned_in"
 
-        save_run_button = tk.Button(
-            button_frame,
-            text="Save and run now",
-            width=20,
-            command=save_and_run
-        )
-        save_run_button.pack(side="right", padx=(0, 8))
+            config.clear()
+            config.update(default_config)
 
-        window.protocol("WM_DELETE_WINDOW", window.destroy)
+            apply_watermark_var.set(bool(config.get("apply_watermark", True)))
+            set_as_wallpaper_var.set(bool(config.get("set_as_wallpaper", True)))
+            mode_var.set(config.get("set_wallpaper_mode", "always"))
+            watermark_mode_var.set(config.get("watermark_mode", "burned_in"))
+
+            if save_settings(show_confirmation=False):
+                self.run_wallpaper_job_in_background(force_apply=True)
+                messagebox.showinfo(
+                    "Defaults restored",
+                    f"Default settings were restored and are now being applied.\n\nSaved to:\n{config_file_path}"
+                )
+
+        def show_watermark_now():
+            apply_watermark_var.set(True)
+            set_as_wallpaper_var.set(True)
+            mode_var.set("always")
+            watermark_mode_var.set("burned_in")
+
+            if save_settings(show_confirmation=False):
+                self.run_wallpaper_job_in_background(force_apply=True)
+                messagebox.showinfo(
+                    "Watermark enabled",
+                    f"The reliable watermarked copy mode has been enabled and is now being applied.\n\nSaved to:\n{config_file_path}"
+                )
+
+        tk.Button(button_bar, text="Close", width=10, command=window.destroy).pack(side="right")
+        tk.Button(button_bar, text="Save", width=10, command=save_settings).pack(side="right", padx=(0, 8))
+        tk.Button(button_bar, text="Save and run now", width=16, command=save_and_run).pack(side="right", padx=(0, 8))
+        tk.Button(button_bar, text="Show watermark now", width=18, command=show_watermark_now).pack(side="right", padx=(0, 8))
+        tk.Button(button_bar, text="Restore defaults", width=14, command=restore_defaults).pack(side="right", padx=(0, 8))
+
+        def cleanup_bindings():
+            try:
+                canvas.unbind_all("<MouseWheel>")
+                canvas.unbind_all("<Button-4>")
+                canvas.unbind_all("<Button-5>")
+            except Exception:
+                pass
+            window.destroy()
+
+        window.protocol("WM_DELETE_WINDOW", cleanup_bindings)
         window.mainloop()
 
     def close_app(self, icon=None, item=None):
@@ -788,6 +910,7 @@ class DailyWallTrayApp:
             menu
         )
 
+        self.sync_watermark_overlay()
         self.run_wallpaper_job_in_background()
         self.icon.run()
 
