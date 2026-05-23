@@ -11,13 +11,13 @@ from pathlib import Path
 import pystray
 from PIL import Image
 
-from wallpaper.app_core import APP_VERSION, load_config, run_dailywall, save_config
+from wallpaper.app_core import APP_VERSION, get_app_base_path, load_config, run_dailywall, save_config
 
 
 APP_NAME = "ByAldon DailyWall"
 STARTUP_REG_NAME = "ByAldonDailyWall"
-ICON_PATH = Path("assets/icon.png")
-ICON_ICO_PATH = Path("assets/icon.ico")
+ICON_PATH = get_app_base_path() / "assets" / "icon.png"
+ICON_ICO_PATH = get_app_base_path() / "assets" / "icon.ico"
 GITHUB_URL = "https://github.com/ByAldon/ByAldon-DailyWall"
 GITHUB_LATEST_RELEASE_API = "https://api.github.com/repos/ByAldon/ByAldon-DailyWall/releases/latest"
 GITHUB_RELEASES_API = "https://api.github.com/repos/ByAldon/ByAldon-DailyWall/releases"
@@ -451,13 +451,15 @@ class DailyWallTrayApp:
         In a packaged EXE later, it will run the EXE directly.
         """
 
+        app_folder = get_app_base_path()
+
         if getattr(sys, "frozen", False):
-            return f'"{sys.executable}"'
+            return f'cmd /c "cd /d "{app_folder}" && "{sys.executable}""'
 
         tray_path = Path(__file__).resolve()
         python_exe = Path(sys.executable).resolve()
 
-        return f'"{python_exe}" "{tray_path}"'
+        return f'cmd /c "cd /d "{app_folder}" && "{python_exe}" "{tray_path}""'
 
     def is_startup_enabled(self):
         """

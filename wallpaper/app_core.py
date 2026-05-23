@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 from wallpaper.bing import fetch_daily_wallpaper_info
@@ -8,7 +9,69 @@ from wallpaper.windows import set_wallpaper
 
 
 CONFIG_FILE = "config.json"
-APP_VERSION = "0.6.1"
+APP_VERSION = "0.6.2"
+
+
+def get_app_base_path():
+    """
+    Return the folder where the app files live.
+
+    This is important for Windows startup. When Windows starts the app from the
+    registry, the working directory may be System32 or another folder. So we
+    should not rely on relative paths from the current working directory.
+    """
+
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+
+    return Path(__file__).resolve().parent.parent
+
+
+def app_path(relative_path):
+    """
+    Convert a project-relative path to an absolute path inside the app folder.
+    """
+
+    return get_app_base_path() / relative_path
+
+
+def resolve_config_path():
+    """
+    Return the full path to config.json.
+    """
+
+    return app_path(CONFIG_FILE)
+
+
+def normalize_config_paths(config):
+    """
+    Make relative paths in config.json absolute for runtime use.
+
+    config.json stays readable and portable, but the app internally uses
+    absolute paths so startup from Windows works reliably.
+    """
+
+    path_keys = [
+        "wallpaper_original_folder",
+        "wallpaper_watermarked_folder",
+        "history_file",
+        "watermark_icon"
+    ]
+
+    normalized = dict(config)
+
+    for key in path_keys:
+        value = normalized.get(key)
+
+        if not value:
+            continue
+
+        path = Path(value)
+
+        if not path.is_absolute():
+            normalized[key] = str(app_path(value))
+
+    return normalized
 
 
 def load_config():
@@ -16,13 +79,21 @@ def load_config():
     Load application settings from config.json.
     """
 
-    config_path = Path(CONFIG_FILE)
+    config_path = resolve_config_path()
 
     if not config_path.exists():
-        raise FileNotFoundError(f"Missing config file: {CONFIG_FILE}")
+        raise FileNotFoundError(f"Missing config file: {config_path}")
 
     with config_path.open("r", encoding="utf-8") as file:
         return json.load(file)
+
+
+def load_runtime_config():
+    """
+    Load config and normalize paths for runtime use.
+    """
+
+    return normalize_config_paths(load_config())
 
 
 def save_config(config):
@@ -30,7 +101,7 @@ def save_config(config):
     Save application settings to config.json.
     """
 
-    config_path = Path(CONFIG_FILE)
+    config_path = resolve_config_path()
 
     with config_path.open("w", encoding="utf-8") as file:
         json.dump(config, file, indent=2, ensure_ascii=False)
@@ -68,7 +139,7 @@ def run_dailywall(logger=print):
         dict: Run summary.
     """
 
-    config = load_config()
+    config = load_runtime_config()
 
     app_name = config.get("app_name", "ByAldon DailyWall")
     market = config.get("market", "en-US")

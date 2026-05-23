@@ -12,6 +12,7 @@ The project is intentionally simple, clean, and transparent about what it does.
 
 ## Features
 
+
 - Downloads the daily Bing wallpaper
 - Saves original wallpapers locally
 - Creates a separate local watermarked copy by default
@@ -33,7 +34,7 @@ The project is intentionally simple, clean, and transparent about what it does.
 ## Current version
 
 ```text
-0.6.1
+0.6.2
 ```
 
 ## Project structure
