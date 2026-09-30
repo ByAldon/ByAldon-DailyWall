@@ -1,3 +1,5 @@
+# This application has been moved to another instance. Go to https://gitlab.com/Aldon/byaldon-dailywall for more information..
+
 <p align="center">
   <img src="assets/icon.png" alt="ByAldon DailyWall v0.6.12 icon" width="128">
 </p>
@@ -284,3 +286,4 @@ This project is licensed under the MIT License.
 ## v0.6.12 note
 
 The watermark can now be shown as a Windows desktop overlay instead of modifying the wallpaper image. This keeps the original downloaded wallpaper untouched and makes positioning above the taskbar more reliable.
+
