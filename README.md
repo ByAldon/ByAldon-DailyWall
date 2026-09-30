@@ -1,4 +1,4 @@
-## This application has been moved to another instance. No new updates will be posted here. Go to: https://gitlab.com/Aldon/byaldon-dailywall for more information..
+## This application has been moved to another instance. No new updates will be posted here. Go to: https://github.com/ByAldon/I-am-leaving-github for more information.
 
 <p align="center">
   <img src="assets/icon.png" alt="ByAldon DailyWall v0.6.12 icon" width="128">
